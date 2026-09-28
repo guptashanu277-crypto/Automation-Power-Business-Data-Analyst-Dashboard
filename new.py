@@ -2,7 +2,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import random, time
+
+import random
+import time
+import smtplib
+
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
@@ -10,8 +16,10 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
 
+from database.connection import supabase
+
 import os
-from google import genai   # latest package
+from google import genai
 
 # 👇 Must be first Streamlit command
 st.set_page_config(page_title="AI Analytics System", layout="wide")
@@ -30,57 +38,216 @@ def get_demo_data():
     return pd.DataFrame(data)
 
 # -------------------------
-# OTP Login System
+# DATABASE LOGIN SYSTEM
+# EMAIL OTP LOGIN SYSTEM
 # -------------------------
+
+def send_email_otp(receiver_email, otp):
+
+    sender_email = st.secrets["GMAIL_EMAIL"]
+    app_password = st.secrets["GMAIL_APP_PASSWORD"]
+
+    subject = "AI Analytics System - OTP"
+
+    body = f"""
+Hello,
+I am Yash Gupta !
+Your OTP for AI Analytics System is:
+
+{otp}
+
+This OTP is valid for 5 minutes.
+
+Do not share this OTP with anyone.
+
+Regards,
+AI Analytics System
+"""
+
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = receiver_email
+    message["Subject"] = subject
+
+    message.attach(
+        MIMEText(body, "plain")
+    )
+
+    with smtplib.SMTP("smtp.gmail.com", 587) as server:
+
+        server.starttls()
+
+        server.login(
+            sender_email,
+            app_password
+        )
+
+        server.sendmail(
+            sender_email,
+            receiver_email,
+            message.as_string()
+        )
+
+
+# -------------------------
+# SESSION STATE
+# -------------------------
+
 if "logged_in" not in st.session_state:
+
     st.session_state.logged_in = False
     st.session_state.otp = None
     st.session_state.otp_time = None
-    st.session_state.role = "user"
+    st.session_state.user = None
+    st.session_state.login_email = None
+
+
+# -------------------------
+# LOGIN
+# -------------------------
 
 if not st.session_state.logged_in:
-    st.title("🔐 Secure Login")
-    mobile = st.text_input("Enter your Mobile Number:")
+
+    st.title("🔐 Student Login")
+
+    email = st.text_input(
+        "Enter your email:",
+        placeholder="example@gmail.com"
+    )
 
     if st.button("Send OTP"):
-        st.session_state.otp = str(random.randint(1000, 9999))
-        st.session_state.otp_time = time.time()
-        st.info(f"Demo OTP (for testing): {st.session_state.otp}")
 
-    otp_input = st.text_input("Enter OTP:")
+        if not email:
+
+            st.error("Please enter your email.")
+
+        else:
+
+            try:
+
+                email = email.strip().lower()
+
+                # Generate 6-digit OTP
+                otp = str(
+                    random.randint(100000, 999999)
+                )
+
+                # Save OTP
+                st.session_state.otp = otp
+                st.session_state.otp_time = time.time()
+                st.session_state.login_email = email
+
+                # Send REAL email OTP
+                send_email_otp(
+                    email,
+                    otp
+                )
+
+                st.success(
+                    "OTP sent successfully 📧"
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"Failed to send OTP: {e}"
+                )
+
+
+    # OTP input
+    otp_input = st.text_input(
+        "Enter OTP:",
+        max_chars=6,
+        type="password"
+    )
+
 
     if st.button("Verify OTP"):
+
         if st.session_state.otp is None:
-            st.error("Please request OTP first.")
+
+            st.error(
+                "Please request OTP first."
+            )
+
         else:
-            elapsed = time.time() - st.session_state.otp_time
-            if elapsed > 30:
-                st.error("OTP expired ❌ Please request a new one.")
+
+            elapsed = (
+                time.time()
+                - st.session_state.otp_time
+            )
+
+            # OTP expiry = 5 minutes
+            if elapsed > 300:
+
+                st.error(
+                    "OTP expired ❌ Please request a new OTP."
+                )
+
+                st.session_state.otp = None
+
             elif otp_input == st.session_state.otp:
+
                 st.session_state.logged_in = True
-                st.session_state.role = "user"
-                st.success("Login successful ✅")
-            else:
-                st.error("Invalid OTP ❌")
 
+                # Create temporary user
+                st.session_state.user = {
+                    "Name": "User",
+                    "Email": st.session_state.login_email,
+                    "Mobile": "",
+                    "Role": "student"
+                }
+
+                st.success(
+                    "Login successful ✅"
+                )
+
+                st.rerun()
+
+            else:
+
+                st.error(
+                    "Invalid OTP ❌"
+                )
+
+
+# -------------------------
+# LOGGED-IN USER
+# -------------------------
 else:
-    # -------------------------
-    # Fake Payment for Admin Unlock
-    # -------------------------
-    if st.session_state.role == "user":
-        st.subheader("💳 Upgrade to Admin Access")
-        payment_code = st.text_input("Enter Payment Code:")
-        if st.button("Submit Payment Code"):
-            if payment_code == "0156":
-                st.session_state.role = "admin"
-                st.success("Payment successful ✅ Admin Access unlocked!")
-            else:
-                st.error("Invalid Payment Code ❌")
 
+    user = st.session_state.user
+
+    st.sidebar.success(
+        f"Welcome, {user.get('Name', 'User')} 👋"
+    )
+
+    st.sidebar.write(
+        f"Email: {user.get('Email', '')}"
+    )
+
+    st.sidebar.write(
+        f"Role: {user.get('Role', 'student')}"
+    )
+
+    if st.sidebar.button("Logout", key="logout_button"):
+
+        st.session_state.logged_in = False
+        st.session_state.otp = None
+        st.session_state.otp_time = None
+        st.session_state.user = None
+        st.session_state.login_email = None
+
+        st.rerun()
+
+    # -------------------------
+    # YOUR EXISTING ANALYTICS CODE
+    # -------------------------
+
+    st.title("🚀 AI Smart Business Analytics System")
     # -------------------------
     # Dataset Selection
     # -------------------------
-    st.title("🚀 AI Smart Business Analytics System")
 
     dataset_choice = st.radio("Select Dataset:", ["Demo Dataset", "Upload Your Own"])
     if dataset_choice == "Upload Your Own":
@@ -92,7 +259,8 @@ else:
             st.stop()
     else:
         df = get_demo_data()
-
+        
+    st.session_state["analytics_df"] = df.copy()
     # -------------------------
     # AI Assistant Section
     # -------------------------
