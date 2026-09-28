@@ -5,3 +5,5 @@ matplotlib
 scikit-learn
 google-genai
 openpyxl
+plotly
+supabase
