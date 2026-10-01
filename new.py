@@ -190,6 +190,10 @@ if not st.session_state.logged_in:
 
                 st.session_state.logged_in = True
 
+                supabase.table("Login_History").insert({
+               "email": st.session_state.login_email
+                }).execute()
+
                 # Create temporary user
                 st.session_state.user = {
                     "Name": "User",
