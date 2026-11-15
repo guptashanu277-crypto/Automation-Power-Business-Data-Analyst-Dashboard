@@ -42,6 +42,7 @@ def get_demo_data():
 # EMAIL OTP LOGIN SYSTEM
 # -------------------------
 
+
 def send_email_otp(receiver_email, otp):
 
     sender_email = st.secrets["GMAIL_EMAIL"]
@@ -73,9 +74,7 @@ AI Analytics System
         MIMEText(body, "plain")
     )
 
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
-
-        server.starttls()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
 
         server.login(
             sender_email,
@@ -87,6 +86,7 @@ AI Analytics System
             receiver_email,
             message.as_string()
         )
+
 
 
 # -------------------------
